@@ -20,3 +20,4 @@ outputs/*
 .DS_Store
 Thumbs.db
 netbio.sif
+slurm/logs/*.out
