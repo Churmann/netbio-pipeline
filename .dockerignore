@@ -1,0 +1,34 @@
+# Keep the build context to code + dependency manifests. Everything the
+# pipeline reads or writes is bind-mounted at run time, so none of it belongs
+# in the image.
+
+# Virtual environment - Windows-specific binaries, and the image installs from
+# requirements.lock instead.
+venv/
+.venv/
+
+# Inputs and results: mounted, never baked in.
+data/
+outputs/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Cluster job scripts - submitted from the host, not run inside the image.
+slurm/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker's own files - no reason to ship them into the context.
+Dockerfile
+.dockerignore
