@@ -1,84 +1,99 @@
 # netbio-pipeline
 
-A small, reproducible network-biology pipeline over a human protein-protein
-interaction (PPI) subnetwork from [STRING](https://string-db.org/).
+A small, reproducible network-biology pipeline that runs as containerised HPC jobs. It builds a protein-protein interaction subnetwork from STRING, computes centrality and community structure, and draws the result. Each stage runs inside a container and is submitted to a SLURM scheduler with dependencies between stages, the same shape as a real cluster workflow.
 
-The pipeline is split into **discrete stages**. Every stage is a standalone
-script whose inputs and outputs are explicit command-line arguments, so each one
-can later run as its own containerised SLURM job.
+The point was to get hands-on with the container-and-HPC stack used in computational biology: Docker, Apptainer/Singularity, and SLURM.
 
-## Stages
+![Apoptosis PPI subnetwork](docs/network.png)
+
+## What it does
+
+The pipeline analyses an apoptosis / DNA-damage-response gene set (TP53, the caspases, the BCL2 family, and related regulators). It:
+
+- pulls the protein-protein interactions among those genes from the STRING database (human, species 9606)
+- builds a weighted graph and computes degree and betweenness centrality
+- detects communities with greedy modularity optimisation
+- writes a ranked hub-gene table and a network figure
+
+The biology reads off the figure: TP53 and the executioner caspases sit central and high-degree, and the network splits into two interacting communities.
+
+## Pipeline architecture
+
+Three stages, each a separate script with explicit inputs and outputs, so every step can run as its own scheduled job:
 
 | Stage | Script | Reads | Writes |
 |-------|--------|-------|--------|
-| 1 | `src/01_fetch_data.py` | STRING API | `data/edges.csv` |
-| 2 | `src/02_metrics.py` | `data/edges.csv` | `outputs/hub_genes.csv` |
-| 3 | `src/03_downstream.py` | `data/edges.csv`, `outputs/hub_genes.csv` | `outputs/network.png` |
+| 1. Fetch | `src/01_fetch_data.py` | STRING API | `data/edges.csv` |
+| 2. Metrics | `src/02_metrics.py` | `data/edges.csv` | `outputs/hub_genes.csv` |
+| 3. Downstream | `src/03_downstream.py` | edges + hub table | `outputs/network.png` |
 
-Stage 1 queries a 20-gene apoptosis / DNA-damage-response set (TP53, MDM2, BAX,
-BCL2, CASP3, ...). Stage 2 computes degree and betweenness centrality and
-detects communities by greedy modularity. Stage 3 draws the network, colouring
-nodes by community and sizing them by degree centrality.
+One container image runs all three stages. On the scheduler, stage 2 waits for stage 1 and stage 3 waits for stage 2, enforced through SLURM job dependencies.
 
-## Setup
+## Reproducibility
+
+- Direct dependencies are pinned to exact versions in `requirements.txt`. The full transitive set is frozen in `requirements.lock`, which is what the image installs.
+- The image is built once with Docker, then converted to an Apptainer `.sif` for HPC use, so the same environment runs on a laptop and on a cluster.
+- Given the same inputs, the pipeline regenerates byte-identical outputs.
+
+## Running it
+
+You can run the pipeline at four levels, from plain Python up to a scheduler. All commands run from the project root.
+
+### 1. Plain Python
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
-```
-
-## Run
-
-With default paths, in order:
-
-```bash
 python src/01_fetch_data.py
 python src/02_metrics.py
 python src/03_downstream.py
 ```
 
-Every path is overridable, which is how the stages stay portable across
-container and scheduler boundaries:
+### 2. Docker
 
 ```bash
-python src/02_metrics.py --edges data/edges.csv --output outputs/hub_genes.csv
+docker build -t netbio:latest .
+docker run --rm -v ./data:/app/data netbio:latest src/01_fetch_data.py
+docker run --rm -v ./data:/app/data -v ./outputs:/app/outputs netbio:latest src/02_metrics.py
+docker run --rm -v ./data:/app/data -v ./outputs:/app/outputs netbio:latest src/03_downstream.py
 ```
 
-Pass `--help` to any stage to see its full interface.
+### 3. Apptainer / Singularity
 
-### Local note: TLS interception on this Windows machine
-
-AVG Antivirus ("Web/Mail Shield") intercepts HTTPS on this machine and re-signs
-certificates with its own root CA. That root is trusted by the Windows
-certificate store but is absent from the `certifi` bundle Python uses, so stage 1
-fails with `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`.
-
-The workaround keeps certificate verification fully enabled: `venv/ca-bundle.pem`
-is certifi's bundle plus that AVG root. Point `requests` at it before stage 1:
-
-```powershell
-$env:REQUESTS_CA_BUNDLE = "$PWD\venv\ca-bundle.pem"   # PowerShell
-```
 ```bash
-export REQUESTS_CA_BUNDLE="$PWD/venv/ca-bundle.pem"    # bash
+apptainer build netbio.sif docker-daemon://netbio:latest
+apptainer run --bind ./data:/app/data netbio.sif src/01_fetch_data.py
+apptainer run --bind ./data:/app/data,./outputs:/app/outputs netbio.sif src/02_metrics.py
+apptainer run --bind ./data:/app/data,./outputs:/app/outputs netbio.sif src/03_downstream.py
 ```
 
-This is a host-environment quirk, not part of the pipeline: no stage script
-contains a certificate workaround, and none is needed inside the Linux
-container. Regenerate the bundle if AVG rotates its root certificate.
+### 4. SLURM
 
-## Layout
+Submit the full dependency chain and watch it run:
 
-```
-data/      input and intermediate data (git-ignored)
-outputs/   final results (git-ignored)
-src/       the three stage scripts
-slurm/     job submission scripts (to be added)
+```bash
+bash slurm/submit_all.sh
+squeue
 ```
 
-## Roadmap
+Each stage has its own job script under `slurm/` with `#SBATCH` resource requests. `submit_all.sh` chains them so each stage starts only when the previous one succeeds.
 
-- [ ] `slurm/` job scripts, one per stage
-- [ ] Dockerfile
-- [ ] Apptainer/Singularity conversion
+## Repository layout
+
+```
+src/                pipeline stages (fetch, metrics, downstream)
+slurm/              one SLURM job script per stage + submit_all.sh
+requirements.txt    direct dependencies, pinned
+requirements.lock   full frozen dependency set (used by the image)
+Dockerfile          builds the pipeline image
+docs/network.png    example output figure
+```
+
+## Requirements
+
+Python 3.12. Docker and Apptainer are optional, needed only for the container and HPC levels. For the SLURM level, any SLURM installation works, including a single-node local setup.
+
+## Notes and next steps
+
+I built this to learn the workflow a computational-biology group actually uses, not just the individual tools. The natural next step is a workflow manager such as Snakemake or Nextflow, which would handle the stage dependencies and job submission automatically in place of the hand-written submit script.
