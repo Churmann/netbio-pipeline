@@ -39,6 +39,8 @@ One container image runs all three stages. On the scheduler, stage 2 waits for s
 
 You can run the pipeline at four levels, from plain Python up to a scheduler. All commands run from the project root.
 
+The gene list, species ID and STRING request parameters live in `config.yaml` at the project root; edit that file to point the pipeline at a different question. Stage 1 reads `./config.yaml` by default, or pass `--config path/to/other.yaml` to override it. The container images bake in a copy, so bind-mount your own over it (e.g. `-v ./config.yaml:/app/config.yaml`, or `--bind ./config.yaml:/app/config.yaml` for Apptainer) to change it without rebuilding.
+
 ### 1. Plain Python
 
 ```bash
