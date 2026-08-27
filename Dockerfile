@@ -25,7 +25,7 @@ WORKDIR /app
 # Dependencies are copied and installed before the source, so that editing a
 # stage script does not invalidate the (slow) dependency layer.
 #
-# requirements.txt is carried along for provenance only - it documents the four
+# requirements.txt is carried along for provenance only - it documents the five
 # direct dependencies for anyone reading the image. The install itself uses the
 # lock file, with --no-deps so pip installs exactly what is pinned there and
 # resolves nothing at build time. `pip check` then verifies that the frozen set
@@ -36,6 +36,11 @@ RUN pip install --no-cache-dir --no-deps -r requirements.lock \
     && pip check
 
 COPY src/ ./src/
+
+# The default pipeline inputs (gene list, species, STRING request parameters).
+# Baked in so the image runs stand-alone; override at run time with either
+# `-v ./config.yaml:/app/config.yaml` or the stage's `--config` argument.
+COPY config.yaml ./
 
 # Default mount points. Both are bind-mounted in normal use; creating them here
 # means the image still runs (writing into the container's own filesystem) when

@@ -1,0 +1,69 @@
+# config.yaml
+#
+# Input parameters for the netbio-pipeline fetch stage (src/01_fetch_data.py).
+# Edit this file to point the pipeline at a different biological question
+# (different genes, different organism, different confidence cut-off) without
+# touching any code. Stages 2 and 3 read the file that stage 1 writes, so they
+# need no configuration of their own.
+#
+# Command-line arguments to 01_fetch_data.py still work and override the values
+# here (e.g. --genes, --species).
+
+# ---------------------------------------------------------------------------
+# Gene set to query
+# ---------------------------------------------------------------------------
+# Gene symbols sent to STRING. The default is an apoptosis / DNA-damage-response
+# set: TP53 and MDM2 sit at the top of this regulatory network, so they are
+# expected to come out as hubs in stage 2.
+genes:
+  - TP53
+  - MDM2
+  - BAX
+  - BCL2
+  - CASP3
+  - CASP9
+  - CASP8
+  - CYCS
+  - APAF1
+  - BAD
+  - BID
+  - BAK1
+  - BCL2L1
+  - FADD
+  - TNF
+  - TRADD
+  - DIABLO
+  - XIAP
+  - PARP1
+  - ATM
+
+# ---------------------------------------------------------------------------
+# Organism
+# ---------------------------------------------------------------------------
+# NCBI taxonomy identifier for the organism the genes belong to.
+# 9606 = Homo sapiens.
+species: 9606
+
+# ---------------------------------------------------------------------------
+# STRING REST API request
+# ---------------------------------------------------------------------------
+string_api:
+  # Base URL of the STRING REST API.
+  base_url: https://string-db.org/api
+
+  # Response format requested from STRING. The stage 1 parser expects TSV.
+  output_format: tsv
+
+  # STRING API method (endpoint). "network" returns the interactions among the
+  # query genes.
+  method: network
+
+  # Minimum STRING combined score, an integer 0-1000, sent as the API's
+  # `required_score` parameter to drop low-confidence interactions.
+  # Leave as null to send no threshold, in which case STRING applies its own
+  # default (medium confidence, 400). The committed outputs were generated with
+  # no threshold set, i.e. null.
+  required_score: null
+
+  # Polite caller identification, requested by STRING's usage guidelines.
+  caller_identity: netbio-pipeline
