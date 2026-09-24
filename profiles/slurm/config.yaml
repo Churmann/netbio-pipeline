@@ -1,0 +1,21 @@
+# Snakemake profile for SLURM:  snakemake --profile profiles/slurm
+#
+# Each rule becomes its own sbatch job, using the cpus / mem_mb / runtime set on
+# the rule in the Snakefile (the same requests as slurm/*.sh). Snakemake itself
+# stays on the login node and submits the next stage when the previous job
+# succeeds, replacing the --dependency=afterok chain in submit_all.sh.
+#
+# Needs snakemake-executor-plugin-slurm (pinned in requirements.txt).
+
+executor: slurm
+jobs: 3                   # at most one job per stage in flight
+latency-wait: 60          # give shared filesystems time to show job outputs
+
+# Run every stage inside the Apptainer image, with the same binds as slurm/*.sh.
+software-deployment-method: apptainer
+apptainer-args: "--bind ./data:/app/data,./outputs:/app/outputs"
+
+# Uncomment and set if your cluster needs them:
+# default-resources:
+#   slurm_partition: "<partition>"
+#   slurm_account: "<account>"

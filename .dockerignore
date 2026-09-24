@@ -32,3 +32,6 @@ Thumbs.db
 # Docker's own files - no reason to ship them into the context.
 Dockerfile
 .dockerignore
+
+# Snakemake working state - host-side only.
+.snakemake/

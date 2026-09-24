@@ -21,3 +21,6 @@ outputs/*
 Thumbs.db
 netbio.sif
 slurm/logs/*.out
+
+# Snakemake working state (metadata, logs, per-job SLURM logs)
+.snakemake/

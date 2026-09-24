@@ -81,11 +81,39 @@ squeue
 
 Each stage has its own job script under `slurm/` with `#SBATCH` resource requests. `submit_all.sh` chains them so each stage starts only when the previous one succeeds.
 
+## Running with Snakemake
+
+The `Snakefile` at the project root describes the same three-stage DAG, so Snakemake works out the order, re-runs only what is out of date, and handles job submission in place of `submit_all.sh`. It reads the same `config.yaml`, so the gene list and STRING parameters still live in one place; editing that file re-runs the whole chain.
+
+Locally, in the venv from level 1:
+
+```bash
+snakemake --cores 1
+```
+
+This fetches the apoptosis subnetwork from STRING, computes the hub table, and draws `outputs/network.png`. A second run does nothing until an input changes. Add `-n` for a dry run that just prints the plan.
+
+Inside the Apptainer image from level 3 (each rule runs in `netbio.sif`):
+
+```bash
+snakemake --cores 1 --sdm apptainer --apptainer-args "--bind ./data:/app/data,./outputs:/app/outputs"
+```
+
+On a SLURM cluster, submitting each rule as its own job:
+
+```bash
+snakemake --profile profiles/slurm
+```
+
+The profile runs every stage inside `netbio.sif` with the same binds and the same CPU, memory and time requests as the scripts in `slurm/`. Snakemake stays on the login node and submits each stage once the one before it succeeds.
+
 ## Repository layout
 
 ```
 src/                pipeline stages (fetch, metrics, downstream)
 slurm/              one SLURM job script per stage + submit_all.sh
+Snakefile           the same pipeline as a Snakemake workflow
+profiles/slurm/     Snakemake profile: one SLURM job per rule
 requirements.txt    direct dependencies, pinned
 requirements.lock   full frozen dependency set (used by the image)
 Dockerfile          builds the pipeline image
@@ -98,4 +126,4 @@ Python 3.12. Docker and Apptainer are optional, needed only for the container an
 
 ## Notes and next steps
 
-I built this to learn the workflow a computational-biology group actually uses, not just the individual tools. The natural next step is a workflow manager such as Snakemake or Nextflow, which would handle the stage dependencies and job submission automatically in place of the hand-written submit script.
+I built this to learn the workflow a computational-biology group actually uses, not just the individual tools. The first step past the hand-written submit script was a workflow manager: the `Snakefile` now handles the stage dependencies and job submission automatically. A natural next step is to fan the workflow out over several gene sets or organisms, which Snakemake handles with wildcards.
